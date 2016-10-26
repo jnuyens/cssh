@@ -1,0 +1,52 @@
+#!/bin/bash
+#Cluster SSH based upon puppet config located in /etc/puppet/manifests/site.pp
+
+if [ ! -f  /etc/puppet/manifests/site.pp ]
+then
+ echo Error: need /etc/puppet/manifests/site.pp to continue
+ exit 1
+fi
+
+if [ $# -le 1 ]
+then
+ echo Usage error: please provide the type of machines and the command to run
+ echo For example: csshsudo all ls -lart /etc
+ echo Use quotes if you want to redirect to a file on the different nodes
+ echo 'csshsudo dev "echo > /var/log/messages"'
+ exit 2
+fi
+
+echo To detect the type of node correctly, ensure it contains the role of the server within the 3 lines behind the node name in the site.pp
+echo
+
+case "$1" in
+	all) echo Running on all nodes
+	hostlist=$(grep ^node /etc/puppet/manifests/site.pp | awk '{ print $2 }' | sed s/\'//g)
+	;;
+	dev) echo Running on Development role nodes
+	hostlist=$(egrep -B3 "role::worker_node::dev|role::generic_node::dev" /etc/puppet/manifests/site.pp | grep ^node |  awk '{ print $2 }' | sed s/\'//g)
+	;;
+        stg) echo Running on Test role nodes
+        hostlist=$(egrep -B3 "role::worker_node::stg|role::generic_node::stg" /etc/puppet/manifests/site.pp | grep ^node |  awk '{ print $2 }' | sed s/\'//g)
+        ;;
+	prd) echo Running on Production role nodes!
+        hostlist=$(egrep -B3 "role::worker_node::prd|role::generic_node::prd" /etc/puppet/manifests/site.pp | grep ^node |  awk '{ print $2 }' | sed s/\'//g)
+        ;;
+     *) echo Error: please provide which kind of servers you want to run this
+ command on: all, dev, test, accept or prod
+        exit 3
+        ;;
+esac
+
+echo Hostlist=$hostlist
+shift
+command=$@
+echo Press enter to confirm to run command: $command as root on these machines, ctrl-c to exit
+read
+for host in $hostlist
+do
+ echo Press enter to doing:  ssh -t $host sudo $@
+ read
+ ssh -t $host sudo $@
+done
+	
